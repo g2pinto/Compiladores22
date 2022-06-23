@@ -1,0 +1,158 @@
+
+
+%type <lvalue> lval
+%type <node> decl variableDec arg instruction iffalse file program 
+%type <sequence> decls variableDecs instructions optionalInstruc optVariableDec args exprs optionalDecls 
+%type <expression> expr integer
+%type <type> data_type //types
+%type <block> block
+%type <s> string
+
+%{
+//-- The rules below will be included in yyparse, the main parsing function.
+%}
+%%
+
+file      : decls                         { compiler->ast($$ = $1); }
+          | optionalDecls program         { $$ = new cdk::sequence_node(LINE, $2, $1); }
+          ;
+
+optionalDecls  :                { $$ = new cdk::sequence_node(LINE); }
+               | decls              { $$ = $1; }
+               ;
+
+
+decls     : decl                                      { $$ = new cdk::sequence_node(LINE, $1); }
+          | decls decl                                { $$ = new cdk::sequence_node(LINE, $2, $1); }
+          ;
+
+decl      : variableDec '\n'                          { $$ = $1; }
+          //| funcDec                               { $$ = $1; }
+          ;
+
+variableDec    : tPUBLIC data_type tIDENTIFIER       { $$ = new l22::variable_declaration_node(LINE, 1,  $2, *$3, nullptr); }
+               | tUSE data_type tIDENTIFIER          { $$ = new l22::variable_declaration_node(LINE, 2,  $2, *$3, nullptr); }
+               | tFOREIGN data_type tIDENTIFIER      { $$ = new l22::variable_declaration_node(LINE, 3,  $2, *$3, nullptr); }
+               | data_type  tIDENTIFIER               { $$ = new l22::variable_declaration_node(LINE, 0, $1, *$2, nullptr); }
+               // with initial value
+               | tPUBLIC data_type  tIDENTIFIER '=' expr      { $$ = new l22::variable_declaration_node(LINE, 1, $2, *$3, $5); }
+               | tUSE data_type tIDENTIFIER '=' expr          { $$ = new l22::variable_declaration_node(LINE, 2,  $2, *$3, $5); }
+               | tFOREIGN data_type tIDENTIFIER '=' expr      { $$ = new l22::variable_declaration_node(LINE, 3,  $2, *$3, $5); }
+               | data_type  tIDENTIFIER  '=' expr             { $$ = new l22::variable_declaration_node(LINE, 0, $1, *$2, $4); }
+               // with initial value and var
+               | tPUBLIC tVAR  tIDENTIFIER '=' expr      { $$ = new l22::variable_declaration_node(LINE, 1, $5->type(), *$3, $5); }
+               | tUSE tVAR tIDENTIFIER '=' expr          { $$ = new l22::variable_declaration_node(LINE, 2,  $5->type(), *$3, $5); }
+               | tFOREIGN tVAR tIDENTIFIER '=' expr      { $$ = new l22::variable_declaration_node(LINE, 3,  $5->type(), *$3, $5); }
+               | tVAR  tIDENTIFIER  '=' expr             { $$ = new l22::variable_declaration_node(LINE, 0, $4->type(), *$2, $4); }
+               ;
+
+variableDecs   : variableDec '\n'                           { $$ = new cdk::sequence_node(LINE, $1);     }
+               | variableDec '\n' variableDecs              { $$ = new cdk::sequence_node(LINE, $1, $3); }
+               ;
+
+optVariableDec     : /* empty */                              { $$ = nullptr; }
+                   | variableDecs                              { $$ = $1; }
+                   ;
+
+data_type          : tTEXT_TYPE                              { $$ = cdk::primitive_type::create(4, cdk::TYPE_STRING);  }
+                   | tINT_TYPE                               { $$ = cdk::primitive_type::create(4, cdk::TYPE_INT);     }
+                   | tDOUBLE_TYPE                            { $$ = cdk::primitive_type::create(8, cdk::TYPE_DOUBLE);  }
+                   | data_type '<' data_type '>'                   { std::vector<std::shared_ptr<cdk::basic_type>> vec(1, $1);
+                                                                 $$ = cdk::functional_type::create(vec, $3);   }
+                   | '[' data_type ']'                       { $$ = cdk::reference_type::create(4, $2); }
+                   | tVOID_TYPE                                { $$ = cdk::primitive_type::create(0, cdk::TYPE_VOID); }
+                   ;
+
+block     : optVariableDec optionalInstruc               { $$ = new l22::block_node(LINE, $1, $2); }             
+          ;
+
+program	: tBEGIN block tEND { compiler->ast(new l22::program_node(LINE, $2)); }
+		;
+
+
+exprs     : expr                             { $$ = new cdk::sequence_node(LINE, $1);     }
+          | expr ',' exprs                   { $$ = new cdk::sequence_node(LINE, $1, $3); }
+          ;
+
+
+
+iffalse        : tELSE block                       { $$ = $2; }
+               | tELIF '(' expr ')' tTHEN block            { $$ = new l22::if_node(LINE, $3, $6); }
+               | tELIF '(' expr ')' tTHEN block iffalse    { $$ = new l22::if_else_node(LINE, $3, $6, $7); }
+               ;
+
+instructions   : instruction  '\n'                    { $$ = new cdk::sequence_node(LINE, $1);     }
+               | instructions instruction         { $$ = new cdk::sequence_node(LINE, $2, $1); }
+               ;
+
+
+optionalInstruc    : /*empty  */                    { $$ = new cdk::sequence_node(LINE); } 
+                   | instructions                     { $$ = $1; }
+                   ;
+
+instruction    : tIF '(' expr ')' tTHEN block            { $$ = new l22::if_node(LINE, $3, $6); }
+               | tIF expr tTHEN block iffalse    { $$ = new l22::if_else_node(LINE, $2, $4, $5); }
+               | tWHILE '(' expr ')' tDO block         { $$ = new l22::while_node(LINE, $3, $6); }                
+               | expr '\n'                             { $$ = new l22::evaluation_node(LINE, $1); }
+               | tWRITE   exprs '\n'                    { $$ = new l22::write_node(LINE, $2, false); }
+               | tWRITELN exprs '\n'                    { $$ = new l22::write_node(LINE, $2, true); }
+               | tSTOP                                 { $$ = new l22::stop_node(LINE);  }
+               | tAGAIN                                { $$ = new l22::again_node(LINE); }
+               | tRETURN '\n'                              { $$ = new l22::return_node(LINE); }
+               | tRETURN expr '\n'                         { $$ = new l22::return_node(LINE, $2); }
+               | block                                 { $$ = $1; }
+               ;
+
+
+expr : integer                    { $$ = $1; }
+	| string                     { $$ = new cdk::string_node(LINE, $1); }
+     | expr '+' expr	          { $$ = new cdk::add_node(LINE, $1, $3); }
+     | expr '-' expr	          { $$ = new cdk::sub_node(LINE, $1, $3); }
+     | expr '*' expr	          { $$ = new cdk::mul_node(LINE, $1, $3); }
+     | expr '/' expr	          { $$ = new cdk::div_node(LINE, $1, $3); }
+     | expr '%' expr	          { $$ = new cdk::mod_node(LINE, $1, $3); }
+     | '-' expr %prec tUNARY       { $$ = new cdk::neg_node(LINE, $2); }
+     | '+' expr %prec tUNARY       { $$ = $2; }
+     | expr '<' expr	          { $$ = new cdk::lt_node(LINE, $1, $3); }
+     | expr '>' expr	          { $$ = new cdk::gt_node(LINE, $1, $3); }
+     | expr tGE expr	          { $$ = new cdk::ge_node(LINE, $1, $3); }
+     | expr tLE expr               { $$ = new cdk::le_node(LINE, $1, $3); }
+     | expr tNE expr	          { $$ = new cdk::ne_node(LINE, $1, $3); }
+     | expr tEQ expr	          { $$ = new cdk::eq_node(LINE, $1, $3); }
+     | '(' expr ')'                { $$ = $2; }
+     | lval                        { $$ = new cdk::rvalue_node(LINE, $1); }  //FIXME
+     | lval '=' expr               { $$ = new cdk::assignment_node(LINE, $1, $3); }
+     //| tIDENTIFIER '(' args ')'    {$$ = new l22::function_call_node(LINE, *$1, $3);}
+     | tSIZEOF '(' expr ')'        { $$ = new l22::size_of_node(LINE, $3); }
+     | lval '?'                    {$$ = new l22::address_of_node(LINE, $1);}
+     | '(' args ')' '-' '>' data_type ':' block  { $$ = new l22::fundef_expression_node(LINE, $2, $8, $6);}
+     ;
+/*
+funcDec   : tPUBLIC tIDENTIFIER '=' '(' args ')' '-' '>' data_type ':' block    { $$ = new l22::variable_declaration_node(LINE, 1, $9, *$2,  
+                                                                                    new l22::fundef_expression_node(LINE, $5, $11));}
+          | tFOREIGN tIDENTIFIER '=' '(' args ')' '-' '>' data_type ':' block   { $$ = new l22::variable_declaration_node(LINE, 2, $9, *$2,  
+                                                                                    new l22::fundef_expression_node(LINE, $5, $11));}
+          | tVAR tIDENTIFIER '=' '(' args ')' '-' '>' data_type ':' block       { $$ = new l22::variable_declaration_node(LINE, 0, $9, *$2,  
+                                                                                    new l22::fundef_expression_node(LINE, $5, $11));}
+          ;
+*/
+
+
+args      : /* empty */        	                   { $$ = new cdk::sequence_node(LINE);  } 
+          | arg                                       { $$ = new cdk::sequence_node(LINE, $1);     }
+          | args ',' arg                              { $$ = new cdk::sequence_node(LINE, $3, $1); }
+          ;
+
+arg       : data_type tIDENTIFIER                     { $$ = new l22::variable_declaration_node(LINE, 0, $1, *$2, nullptr); }
+          ;
+
+
+lval : tIDENTIFIER             { $$ = new cdk::variable_node(LINE, $1); }
+     ;
+
+
+integer         : tINTEGER                      { $$ = new cdk::integer_node(LINE, $1); };
+string          : tSTRING                       { $$ = $1; }
+                | string tSTRING                { $$ = $1; $$->append(*$2); delete $2; }
+                ;
+%%
