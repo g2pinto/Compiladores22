@@ -15,6 +15,8 @@ namespace l22 {
   public:
     inline write_node(int lineno, cdk::sequence_node *argument, bool nLine = false) :
         cdk::basic_node(lineno), _nLine(nLine), _argument(argument) {
+          std::cout << "\n\nnew write\n";
+          std::cout << argument->node(0)->label() << "\n\n";
     }
   public:
     inline bool nLine(){

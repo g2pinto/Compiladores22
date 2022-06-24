@@ -36,7 +36,7 @@ inline bool valid(int indent) {
 %}
 SPACE        [ \t\r\n]
 
-%x X_STRING X_NEWLINE X_COMMENT X_WHILE X_IF
+%x X_STRING X_NEWLINE X_COMMENT X_WHILE X_IF X_SPECIALCHAR
 %%
   yydebug=1; set_debug(1);
 
@@ -90,7 +90,7 @@ SPACE        [ \t\r\n]
   /* ====[                      2.2 - INDENTATION                     ]==== */
   /* ====================================================================== */
 
-\n                   yy_push_state(X_NEWLINE); /* delay decision */
+\n                   {yy_push_state(X_NEWLINE);return *yytext;} /* delay decision */
 
 <X_NEWLINE>^{SPACE}+  {
     yy_pop_state();
@@ -101,7 +101,6 @@ SPACE        [ \t\r\n]
             // at the same level: ignore index
             // do not return tINDENT;
             std::cerr << "CASE 1a (levels to pop = 0)" << std::endl;
-            return '\n';
           }
           else {
             // nothing is done here: the scanner will ignore the input while levels > 0
@@ -112,7 +111,6 @@ SPACE        [ \t\r\n]
               std::cerr << "POPPING LEVELS (" << lLevelsToPop << ")" << std::endl;
               lLevelsToPop--;
               indents.pop_back();
-              return '\n';
             }
           }
     }
@@ -120,13 +118,11 @@ SPACE        [ \t\r\n]
           // first block to open
           std::cerr << "CASE 2" << std::endl;
           indents.push_back(yyleng);
-          return '\n';
     }
     else if (yyleng > indents.back()) {
           // this is like the one before, but not the first
           std::cerr << "CASE 3" << std::endl;
           indents.push_back(yyleng);
-          return '\n'; 
     }
     else {
           // something wrong: bad indent: communicate to user
@@ -135,31 +131,27 @@ SPACE        [ \t\r\n]
     }
 
 }
-
-<X_NEWLINE>\n      ; /* ignore successive newline chars */
+<X_NEWLINE>\n      ; // ignore successive newline chars
 <X_NEWLINE>.       {
-                      // in this case, we have a new function starting
-                      // first, return whatever we are seeing to the input
-                      yyless(0);
-                      yy_pop_state();
-                      if (indents.size() > 0) {
-                        std::cerr << "should restart " << indents.size() << " functions at " << yylineno << std::endl;
-                        indents.pop_back();
-                        if (indents.size() > 0) { restart_functions = true; }
-                        return '\n';
-                      }
-                      else return '\n'; // top-level declarations
-                    }
-
+  // in this case, we have a new function starting
+  // first, return whatever we are seeing to the input
+  yyless(0);
+  yy_pop_state();
+  if (indents.size() > 0) {
+    std::cerr << "should restart " << indents.size() << " functions at " << yylineno << std::endl;
+    indents.pop_back();
+    if (indents.size() > 0) { restart_functions = true; }
+  }
+  // top-level declarations
+}
+\t
 
 ";".*\n                 ; /* ignore comments */
 
 "(*"                   yy_push_state(X_COMMENT);
 <X_COMMENT>"(*"        yy_push_state(X_COMMENT);
 <X_COMMENT>"*)"        yy_pop_state();
-<X_COMMENT>.|\n        ; /* ignore content */
-
-
+<X_COMMENT>.|\n        ; /* ignore content */          
 
 0[0-6]+              yylval.i = strtoul(yytext, NULL, 7); return tINTEGER;
 0[0-9]+              yyerror("Invalid base 7 number.");
@@ -206,17 +198,33 @@ SPACE        [ \t\r\n]
 
 [A-Za-z][A-Za-z0-9_]*  yylval.s = new std::string(yytext); return tIDENTIFIER;
 
-\"                      yy_push_state(X_STRING); yylval.s = new std::string("");
-<X_STRING>\"            yy_pop_state(); return tSTRING;
-<X_STRING>\\\"          *yylval.s += yytext + 1;
-<X_STRING>.             *yylval.s += yytext;
-<X_STRING>\0            yy_pop_state(); return tSTRING;
-<X_STRING>\\n           yyerror("newline in string");
 
+
+\"                                  yy_push_state(X_STRING); yylval.s = new std::string("");
+<X_STRING>\\                        yy_push_state(X_SPECIALCHAR);
+<X_STRING>\"                        {
+                                    yylval.s = new std::string(strlit.str());
+                                    strlit.str("");
+                                    yy_pop_state();
+                                    return tSTRING;
+                                    }
+<X_STRING>.                         strlit << *yytext;
+<X_STRING>\n                        yyerror("newline in string");
+
+<X_SPECIALCHAR>n                    { strlit << '\n'; yy_pop_state(); }
+<X_SPECIALCHAR>r                    { strlit << '\r'; yy_pop_state(); }
+<X_SPECIALCHAR>t                    { strlit << '\t'; yy_pop_state(); }
+<X_SPECIALCHAR>\'                   { strlit << "~'"; yy_pop_state(); }
+<X_SPECIALCHAR>\~                   { strlit << "~~"; yy_pop_state(); }
+<X_SPECIALCHAR>[[:xdigit:]]{1,2}    { strlit << (char)(unsigned char)std::stoul(yytext, NULL, 16);
+                                      yy_pop_state();
+                                    }
+<X_SPECIALCHAR>0[[:alnum:]]*        { strlit << '\0'; yy_pop_state(); }
+<X_SPECIALCHAR>.                    { strlit << *yytext; yy_pop_state(); }
 
 [-()<>=+*/%]       return *yytext;
 
-[ \t\n]+               ; /* ignore whitespace */
+[ \t]+               ; /* ignore whitespace */
 
 .                      yyerror("Unknown character");
 

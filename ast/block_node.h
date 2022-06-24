@@ -14,6 +14,9 @@ namespace l22 {
   public:
     inline block_node(int lineno, cdk::basic_node *declarations, cdk::basic_node *instructions) :
         cdk::basic_node(lineno), _declarations(declarations), _instructions(instructions) {
+          std::cout << "new block\n";
+          //std::cout << declarations->label() <<"\n";
+          //std::cout << instructions->label() <<"\n";
     }
 
   public:

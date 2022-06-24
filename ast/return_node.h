@@ -15,6 +15,8 @@ namespace l22 {
   public:
     inline return_node(int lineno, cdk::expression_node *retval) :
         cdk::basic_node(lineno), _retval(retval) {
+          std::cout << "\n\nnew write\n";
+          std::cout << retval->label() << "\n\n";
     }
 
     inline return_node(int lineno) :

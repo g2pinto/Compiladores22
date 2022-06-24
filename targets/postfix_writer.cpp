@@ -55,10 +55,43 @@ void l22::postfix_writer::do_size_of_node(l22::size_of_node * const node, int lv
   _pf.INT(node->statement()->type()->size());
 }
 void l22::postfix_writer::do_return_node(l22::return_node * const node, int lvl) {
-  // EMPTY
+  std::cout << "post_return_1\n";
+  ASSERT_SAFE_EXPRESSIONS;
+
+  node->retval()->accept(this, lvl + 2);
+  _pf.STFVAL32();
+/*
+  // should not reach here without returning a value (if not void)
+  if (_function->type()->name() != cdk::TYPE_VOID) {
+    node->retval()->accept(this, lvl + 2);
+
+    if (_function->type()->name() == cdk::TYPE_INT || _function->type()->name() == cdk::TYPE_STRING
+        || _function->type()->name() == cdk::TYPE_POINTER) {
+      _pf.STFVAL32();
+    } else if (_function->type()->name() == cdk::TYPE_DOUBLE) {
+      if (node->retval()->type()->name() == cdk::TYPE_INT) _pf.I2D();
+      _pf.STFVAL64();
+    //} else if (_function->type()->name() == cdk::TYPE_STRUCT) {
+    //  // "return" tuple: actually, must allocate space for it on the stack
+    //  // TODO
+    } else {
+      std::cerr << node->lineno() << ": should not happen: unknown return type" << std::endl;
+    }
+  }
+*/
+  //_pf.JMP(_currentBodyRetLabel);
+  //_returnSeen = true;
+  std::cout << "post_return_2\n";
 }
 void l22::postfix_writer::do_block_node(l22::block_node * const node, int lvl) {
+  std::cout << "post_block_1\n";
   // EMPTY
+  ASSERT_SAFE_EXPRESSIONS;
+  if (node->declarations())
+    node->declarations()->accept(this, lvl + 2);
+  if (node->instructions())
+  node->instructions()->accept(this, lvl + 2);
+  std::cout << "post_block_2\n";
 }
 void l22::postfix_writer::do_stop_node(l22::stop_node * const node, int lvl) {
   ASSERT_SAFE_EXPRESSIONS;
@@ -76,7 +109,9 @@ void l22::postfix_writer::do_again_node(l22::again_node * const node, int lvl) {
     throw new std::string("Cannot perform a continue outside a 'for' loop.");
 }
 void l22::postfix_writer::do_write_node(l22::write_node * const node, int lvl) {
+  std::cout << "hellooooo\n";
   ASSERT_SAFE_EXPRESSIONS;
+  std::cout << "hellooooo\n";
   for (size_t i = 0; i < node->argument()->size(); i++)
   {
     auto expression = (cdk::expression_node *)node->argument()->node(i);
@@ -111,7 +146,7 @@ void l22::postfix_writer::do_function_declaration_node(l22::function_declaration
   // EMPTY
 }
 void l22::postfix_writer::do_function_call_node(l22::function_call_node * const node, int lvl) {
-  ASSERT_SAFE_EXPRESSIONS;
+  //ASSERT_SAFE_EXPRESSIONS;
   /*
   //auto symbol = _symtab.find(node->identifier());
 
@@ -167,28 +202,40 @@ void l22::postfix_writer::do_index_node(l22::index_node * const node, int lvl) {
 
 void l22::postfix_writer::do_sequence_node(cdk::sequence_node * const node, int lvl) {
   for (size_t i = 0; i < node->size(); i++) {
-    node->node(i)->accept(this, lvl);
+    l22::evaluation_node * evaluation = dynamic_cast<l22::evaluation_node *>((l22::program_node*)node->node(i));
+      std::cout << "byebye\n";
+      std::cout << "program = " << ((l22::program_node*)node->node(i))->statements()->label()<< "\n";
+      std::cout << "sequence = " << node->label() << "size = " << node->size() << "line = " << node->lineno() << " \n";
+    //if (evaluation != nullptr){
+      std::cout << "maybenow\n\n";
+      node->node(i)->accept(this, lvl+2);
+    //}
+      
   }
 }
 
 //---------------------------------------------------------------------------
 
 void l22::postfix_writer::do_integer_node(cdk::integer_node * const node, int lvl) {
+  std::cout << "post_int_1\n";
   _pf.INT(node->value()); // push an integer
+  std::cout << "post_int_2\n";
 }
 
 void l22::postfix_writer::do_string_node(cdk::string_node * const node, int lvl) {
   int lbl1;
+  std::cout << "post_str_1\n";
 
-  /* generate the string */
+  // generate the string 
   _pf.RODATA(); // strings are DATA readonly
   _pf.ALIGN(); // make sure we are aligned
   _pf.LABEL(mklbl(lbl1 = ++_lbl)); // give the string a name
   _pf.SSTRING(node->value()); // output string characters
 
-  /* leave the address on the stack */
+  // leave the address on the stack 
   _pf.TEXT(); // return to the TEXT segment
   _pf.ADDR(mklbl(lbl1)); // the string to be printed
+  std::cout << "post_str_2\n";
 }
 
 void l22::postfix_writer::do_double_node(cdk::double_node * const node, int lvl) {
@@ -325,6 +372,8 @@ void l22::postfix_writer::do_program_node(l22::program_node * const node, int lv
   // The ProgramNode (representing the whole program) doubles as a
   // main function node.
 
+  std::cout << "calling program node\n";
+
   // generate the main function (RTS mandates that its name be "_main")
   _pf.TEXT();
   _pf.ALIGN();
@@ -332,6 +381,7 @@ void l22::postfix_writer::do_program_node(l22::program_node * const node, int lv
   _pf.LABEL("_main");
   _pf.ENTER(0);  // Simple doesn't implement local variables
 
+  std::cout << node->statements()->label() << "\n\n";
   node->statements()->accept(this, lvl);
 
   // end the main function

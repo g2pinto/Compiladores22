@@ -54,13 +54,21 @@ void l22::type_checker::do_size_of_node(l22::size_of_node *const node, int lvl) 
   node->type(cdk::primitive_type::create(4, cdk::TYPE_INT));
 }
 void l22::type_checker::do_return_node(l22::return_node *const node, int lvl) {
+  std::cout << "type_return_1\n";
+  node->retval()->accept(this, lvl);
+  std::cout << "type_return_2\n";
   // EMPTY TODO
 }
 void l22::type_checker::do_block_node(l22::block_node *const node, int lvl) {
-  if (node->declarations())
+  std::cout << "ola\n";
+  if (node->declarations()){
     node->declarations()->accept(this, lvl + 2);
-  if (node->instructions())
+  }
+  if (node->instructions()){
     node->instructions()->accept(this, lvl + 2);
+  }
+  std::cout << "ola2\n";
+
 }
 void l22::type_checker::do_stop_node(l22::stop_node *const node, int lvl) {
   // EMPTY (anything here?)
@@ -69,6 +77,9 @@ void l22::type_checker::do_again_node(l22::again_node *const node, int lvl) {
   // EMPTY  (anything here?)
 }
 void l22::type_checker::do_write_node(l22::write_node *const node, int lvl) {
+  
+  std::cout << "ola3\n";
+
   node->argument()->accept(this, lvl + 2);
 
   for (size_t i = 0; i < node->argument()->size(); i++)
@@ -77,11 +88,42 @@ void l22::type_checker::do_write_node(l22::write_node *const node, int lvl) {
     if (type->name() == cdk::TYPE_POINTER)
       throw std::string("cannot print a pointer!");
   }
+  std::cout << "ola4\n";
+
 }
 
 
 void l22::type_checker::do_variable_declaration_node(l22::variable_declaration_node *const node, int lvl) {
-  // EMPTY
+  if (node->initializer() != nullptr) {
+    node->initializer()->accept(this, lvl + 2);
+
+    if (node->is_typed(cdk::TYPE_INT)) {
+      if (!node->initializer()->is_typed(cdk::TYPE_INT)) throw std::string("wrong type for initializer (integer expected).");
+    } else if (node->is_typed(cdk::TYPE_DOUBLE)) {
+      if (!node->initializer()->is_typed(cdk::TYPE_INT) && !node->initializer()->is_typed(cdk::TYPE_DOUBLE)) {
+        throw std::string("wrong type for initializer (integer or double expected).");
+      }
+    } else if (node->is_typed(cdk::TYPE_STRING)) {
+      if (!node->initializer()->is_typed(cdk::TYPE_STRING)) {
+        throw std::string("wrong type for initializer (string expected).");
+      }
+    } else if (node->is_typed(cdk::TYPE_POINTER)) {
+      if (!node->initializer()->is_typed(cdk::TYPE_POINTER)) {
+        auto in = (cdk::literal_node<int>*)node->initializer();
+        if (in == nullptr || in->value() != 0) throw std::string("wrong type for initializer (pointer expected).");
+      }
+    } else {
+      throw std::string("unknown type for initializer.");
+    }
+  }
+  const std::string &id = node->variableId();
+
+  std::shared_ptr<l22::symbol> symbol = std::make_shared<l22::symbol>(node->type(), id, true, node->qualifier());
+  if (_symtab.insert(id, symbol)) {
+    _parent->set_new_symbol(symbol);  // advise parent that a symbol has been inserted
+  } else {
+    throw std::string("variable '" + id + "' redeclared");
+  }
 }
 
 void l22::type_checker::do_function_declaration_node(l22::function_declaration_node *const node, int lvl) {
@@ -169,13 +211,17 @@ void l22::type_checker::do_index_node(l22::index_node *const node, int lvl) {
 //---------------------------------------------------------------------------
 
 void l22::type_checker::do_integer_node(cdk::integer_node *const node, int lvl) {
+  std::cout << "type_int_1\n";
   ASSERT_UNSPEC;
   node->type(cdk::primitive_type::create(4, cdk::TYPE_INT));
+  std::cout << "type_int_1\n";
 }
 
 void l22::type_checker::do_string_node(cdk::string_node *const node, int lvl) {
+  std::cout << "type_string_1\n";
   ASSERT_UNSPEC;
   node->type(cdk::primitive_type::create(4, cdk::TYPE_STRING));
+  std::cout << "type_string_2\n";
 }
 
 void l22::type_checker::do_double_node(cdk::double_node *const node, int lvl) {
@@ -293,7 +339,9 @@ void l22::type_checker::do_assignment_node(cdk::assignment_node *const node, int
 //---------------------------------------------------------------------------
 
 void l22::type_checker::do_program_node(l22::program_node *const node, int lvl) {
-  // EMPTY
+  std::cout << "type_program_1\n";
+  node->statements()->accept(this, lvl +2);
+  std::cout << "type_program_2\n";
 }
 
 void l22::type_checker::do_evaluation_node(l22::evaluation_node *const node, int lvl) {

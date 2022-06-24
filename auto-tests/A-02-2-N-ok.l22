@@ -2,4 +2,3 @@ begin
   writeln "s" "tr" "i" "ng"
   return 0
 end
-

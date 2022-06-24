@@ -150,10 +150,15 @@ void l22::xml_writer::do_fundef_expression_node(l22::fundef_expression_node * co
 //---------------------------------------------------------------------------
 
 void l22::xml_writer::do_sequence_node(cdk::sequence_node * const node, int lvl) {
-  os() << std::string(lvl, ' ') << "<sequence_node size='" << node->size() << "'>" << std::endl;
-  for (size_t i = 0; i < node->size(); i++)
-    node->node(i)->accept(this, lvl + 2);
-  closeTag(node, lvl);
+  os() << std::string(lvl, ' ') << "<sequence_node size='" << /*node->size() <<*/ "'>" << std::endl;
+  l22::evaluation_node * evaluation = dynamic_cast<l22::evaluation_node *>(node);
+  if (evaluation == nullptr){
+      std::cout << "its null";
+  } else{
+    for (size_t i = 0; i < node->size(); i++)
+        node->node(i)->accept(this, lvl + 2);
+      closeTag(node, lvl);
+  }
 }
 
 //---------------------------------------------------------------------------

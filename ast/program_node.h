@@ -14,10 +14,14 @@ namespace l22 {
   public:
     inline program_node(int lineno, cdk::basic_node *statements) :
         cdk::basic_node(lineno), _statements(statements) {
+          std::cout << "new program\n";
+          std::cout << "\n\n\n";
+          std::cout << statements->label() << "\n\n";
     }
 
   public:
     inline cdk::basic_node *statements() {
+      std::cout << _statements->label() << "\n\n";
       return _statements;
     }
 
